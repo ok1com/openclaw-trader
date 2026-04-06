@@ -326,6 +326,56 @@ def calculate_final_score(tech, fg, funding_rate, pnl_pct):
     }
 
 
+def calc_atr_stop(price, atr, multiplier=2.5):
+    """ATR 기반 손절가 계산"""
+    stop_price = round(price - atr * multiplier)
+    stop_pct = round((stop_price - price) / price * 100, 2)
+    return {"stop_price": stop_price, "stop_pct": stop_pct, "atr": round(atr), "multiplier": multiplier}
+
+
+def calc_risk_reward(entry, stop, target):
+    """R:R 비율 계산"""
+    risk = abs(entry - stop)
+    reward = abs(target - entry)
+    rr = round(reward / risk, 2) if risk > 0 else 0
+    return {"entry": entry, "stop": stop, "target": target, "risk": risk, "reward": reward, "rr_ratio": rr, "acceptable": rr >= 2.0}
+
+
+def calc_kelly_position(win_rate, rr_ratio, total_capital, max_risk_pct=0.02):
+    """Kelly Criterion 기반 포지션 사이징
+    - win_rate: 예상 승률 (0~1)
+    - rr_ratio: 리스크/리워드 비율
+    - total_capital: 총 자산 (원)
+    - max_risk_pct: 1회 최대 허용 손실률 (기본 2%)
+    """
+    if rr_ratio <= 0:
+        return {"kelly_fraction": 0, "position_krw": 0, "max_loss_krw": 0}
+
+    # Kelly: f = (bp - q) / b, where b=RR ratio, p=win_rate, q=1-p
+    b = rr_ratio
+    p = win_rate
+    q = 1 - p
+    kelly_full = (b * p - q) / b if b > 0 else 0
+
+    # Half Kelly (보수적 적용)
+    kelly_half = max(0, min(kelly_full / 2, 0.25))  # 최대 25% 캡
+
+    # 리스크 기반 상한선
+    max_loss_krw = round(total_capital * max_risk_pct)
+    kelly_position = round(total_capital * kelly_half)
+
+    # 둘 중 작은 값 적용
+    position = min(kelly_position, total_capital * 0.30)  # 최대 30% 캡
+
+    return {
+        "kelly_fraction": round(kelly_half, 4),
+        "kelly_full": round(kelly_full, 4),
+        "position_krw": round(position),
+        "max_loss_krw": max_loss_krw,
+        "risk_pct": max_risk_pct,
+    }
+
+
 def format_score_report(result):
     """점수 리포트 텍스트 생성"""
     lines = []
