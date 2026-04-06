@@ -1,0 +1,30 @@
+# 환경변수 & 시크릿
+.env
+config/.env
+*.key
+*.pem
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.eggs/
+
+# 로그 & 데이터
+logs/*.log
+data/*.json
+data/*.csv
+
+# 내부 문서
+.openclaw/
+AGENT.md
+AGENTS.md
+BOOTSTRAP.md
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+
+# OS
+.DS_Store

@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETH Trading Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root {
+  --bg: #0d1117; --card: #161b22; --border: #30363d;
+  --text: #e6edf3; --dim: #8b949e; --green: #3fb950;
+  --red: #f85149; --yellow: #d29922; --blue: #58a6ff;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; font-size:14px; }
+
+.header { display:flex; align-items:center; justify-content:space-between; padding:12px 20px; border-bottom:1px solid var(--border); }
+.header h1 { font-size:18px; }
+.header .live { color:var(--green); font-size:12px; animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+.grid { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; padding:12px 20px; }
+.card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:16px; }
+.card-title { font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+.card-value { font-size:24px; font-weight:700; }
+.card-sub { font-size:12px; color:var(--dim); margin-top:4px; }
+
+.main { display:grid; grid-template-columns:2fr 1fr; gap:12px; padding:0 20px 12px; }
+.chart-area { background:var(--card); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.chart-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); }
+.chart-tab { padding:8px 16px; cursor:pointer; font-size:12px; color:var(--dim); border:none; background:none; }
+.chart-tab.active { color:var(--blue); border-bottom:2px solid var(--blue); }
+#chart-container { height:400px; }
+
+.sidebar { display:flex; flex-direction:column; gap:12px; }
+.indicator { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); }
+.indicator:last-child { border:none; }
+.ind-label { color:var(--dim); font-size:12px; }
+.ind-value { font-weight:600; }
+
+.pnl-bar-container { margin-top:12px; }
+.pnl-bar { height:24px; background:#1c2128; border-radius:12px; position:relative; overflow:hidden; margin-top:6px; }
+.pnl-fill { height:100%; border-radius:12px; transition:width .5s; }
+.pnl-markers { display:flex; justify-content:space-between; font-size:10px; color:var(--dim); margin-top:2px; }
+
+.score-bar { display:flex; align-items:center; gap:8px; margin-top:8px; }
+.score-track { flex:1; height:8px; background:#1c2128; border-radius:4px; position:relative; }
+.score-fill { height:100%; border-radius:4px; transition:width .5s; }
+.score-label { font-size:20px; font-weight:700; min-width:60px; text-align:right; }
+
+.actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+.btn { padding:10px; border:none; border-radius:6px; font-weight:600; cursor:pointer; font-size:13px; }
+.btn-buy { background:var(--green); color:#000; }
+.btn-sell { background:var(--red); color:#fff; }
+.btn-analyze { background:var(--blue); color:#fff; grid-column:span 2; }
+.btn:hover { opacity:.85; }
+
+.bottom { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:0 20px 20px; }
+.log-area { max-height:200px; overflow-y:auto; font-size:12px; }
+.log-entry { padding:6px 0; border-bottom:1px solid var(--border); }
+.log-time { color:var(--dim); }
+
+.toast { position:fixed; bottom:20px; right:20px; background:var(--card); border:1px solid var(--border); padding:12px 20px; border-radius:8px; display:none; z-index:999; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔷 ETH Trading Dashboard</h1>
+  <div>
+    <span class="live">● LIVE</span>
+    <span id="update-time" style="margin-left:12px;color:var(--dim);font-size:12px;"></span>
+  </div>
+</div>
+
+<!-- 상단 카드 -->
+<div class="grid">
+  <div class="card">
+    <div class="card-title">현재가</div>
+    <div class="card-value" id="price">-</div>
+    <div class="card-sub" id="price-change">-</div>
+  </div>
+  <div class="card">
+    <div class="card-title">내 손익</div>
+    <div class="card-value" id="pnl-pct">-</div>
+    <div class="card-sub" id="pnl-krw">-</div>
+  </div>
+  <div class="card">
+    <div class="card-title">총 자산</div>
+    <div class="card-value" id="total-asset">-</div>
+    <div class="card-sub" id="eth-ratio">-</div>
+  </div>
+  <div class="card">
+    <div class="card-title">공포탐욕지수</div>
+    <div class="card-value" id="fg-value">-</div>
+    <div class="card-sub" id="fg-label">-</div>
+  </div>
+</div>
+
+<!-- 메인: 차트 + 사이드바 -->
+<div class="main">
+  <div class="chart-area">
+    <div class="chart-tabs">
+      <button class="chart-tab active" data-interval="minutes60">1H</button>
+      <button class="chart-tab" data-interval="minutes240">4H</button>
+      <button class="chart-tab" data-interval="days">1D</button>
+    </div>
+    <div id="chart-container"></div>
+  </div>
+
+  <div class="sidebar">
+    <!-- 기술적 지표 -->
+    <div class="card">
+      <div class="card-title">기술적 지표</div>
+      <div class="indicator"><span class="ind-label">RSI (일봉)</span><span class="ind-value" id="rsi-day">-</span></div>
+      <div class="indicator"><span class="ind-label">RSI (4시간)</span><span class="ind-value" id="rsi-4h">-</span></div>
+      <div class="indicator"><span class="ind-label">MACD</span><span class="ind-value" id="macd">-</span></div>
+      <div class="indicator"><span class="ind-label">MA50</span><span class="ind-value" id="ma50">-</span></div>
+      <div class="indicator"><span class="ind-label">MA200</span><span class="ind-value" id="ma200">-</span></div>
+      <div class="indicator"><span class="ind-label">골든크로스</span><span class="ind-value" id="golden">-</span></div>
+    </div>
+
+    <!-- 손익 바 -->
+    <div class="card">
+      <div class="card-title">손익 범위</div>
+      <div class="pnl-bar-container">
+        <div class="pnl-bar">
+          <div class="pnl-fill" id="pnl-bar-fill"></div>
+        </div>
+        <div class="pnl-markers">
+          <span>🛑 -7%</span>
+          <span>평단가</span>
+          <span>🎯 +15%</span>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:8px;">
+        <span id="pnl-bar-label" style="font-size:16px;font-weight:700;">-</span>
+      </div>
+    </div>
+
+    <!-- 매매 버튼 -->
+    <div class="card">
+      <div class="card-title">매매 실행</div>
+      <div class="actions">
+        <button class="btn btn-buy" onclick="copyCmd('/buy 500000')">매수 50만</button>
+        <button class="btn btn-sell" onclick="copyCmd('/sell 50')">매도 50%</button>
+        <button class="btn btn-buy" onclick="copyCmd('/buy 1000000')">매수 100만</button>
+        <button class="btn btn-sell" onclick="copyCmd('/sell all')">전량매도</button>
+        <button class="btn btn-analyze" onclick="copyCmd('/analyze')">📊 AI 분석 실행</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 하단: 스코어 + 로그 -->
+<div class="bottom">
+  <div class="card">
+    <div class="card-title">AI 스코어링 판단</div>
+    <div class="score-bar">
+      <div class="score-track">
+        <div class="score-fill" id="score-fill"></div>
+      </div>
+      <div class="score-label" id="score-value">-</div>
+    </div>
+    <div id="score-action" style="text-align:center;margin-top:8px;font-size:16px;font-weight:700;">-</div>
+    <div id="score-details" style="margin-top:12px;font-size:12px;color:var(--dim);"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">AI 신호 내역</div>
+    <div class="log-area" id="signal-log">
+      <div style="color:var(--dim);">텔레그램에서 /analyze 실행 후 내역이 표시됩니다.</div>
+    </div>
+  </div>
+</div>
+
+<!-- 알림 설정 패널 -->
+<div class="card" style="margin-top:16px">
+  <h3>🔔 알림 설정</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:8px">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="alert-browser" checked onchange="ALERT_CONFIG.useBrowserNotification=this.checked">
+      <span>🖥 브라우저 알림</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="alert-sound" checked onchange="ALERT_CONFIG.useSound=this.checked">
+      <span>🔊 사운드</span>
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="alert-telegram" checked onchange="ALERT_CONFIG.useTelegram=this.checked">
+      <span>📱 텔레그램</span>
+    </label>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="color:var(--dim)">쿨다운:</span>
+      <select id="alert-cooldown" onchange="ALERT_CONFIG.cooldownMinutes=parseInt(this.value)" style="background:#21262d;color:var(--text);border:1px solid #30363d;padding:4px 8px;border-radius:4px">
+        <option value="10">10분</option>
+        <option value="30" selected>30분</option>
+        <option value="60">1시간</option>
+        <option value="120">2시간</option>
+      </select>
+    </div>
+    <button onclick="testAlert()" style="background:#238636;color:white;border:none;padding:6px 16px;border-radius:4px;cursor:pointer">🔔 테스트 알림</button>
+    <button onclick="showTgSetup()" style="background:#30363d;color:white;border:none;padding:6px 16px;border-radius:4px;cursor:pointer;margin-left:6px">⚙️ 텔레그램 설정</button>
+  </div>
+  <div style="margin-top:8px;color:var(--dim);font-size:0.8em">
+    점수 ±15 이상 → 일반 알림 | ±30 이상 → 긴급 알림 (소리 3연타 + 텔레그램 즉시 발송)
+  </div>
+  <!-- 텔레그램 설정 모달 -->
+  <div id="tg-setup" style="display:none;margin-top:12px;padding:12px;background:#0d1117;border:1px solid var(--border);border-radius:8px">
+    <div style="font-weight:bold;margin-bottom:8px">📱 텔레그램 알림 설정</div>
+    <div style="margin-bottom:6px">
+      <label style="font-size:12px;color:var(--dim)">Bot Token:</label><br>
+      <input id="tg-token-input" type="password" placeholder="1234567890:AABb..." style="width:100%;padding:6px;background:#161b22;border:1px solid var(--border);color:var(--text);border-radius:4px">
+    </div>
+    <div style="margin-bottom:8px">
+      <label style="font-size:12px;color:var(--dim)">Chat ID:</label><br>
+      <input id="tg-chatid-input" type="text" placeholder="8548561063" style="width:100%;padding:6px;background:#161b22;border:1px solid var(--border);color:var(--text);border-radius:4px">
+    </div>
+    <button onclick="saveTgSetup()" style="background:#238636;color:white;border:none;padding:6px 16px;border-radius:4px;cursor:pointer">💾 저장</button>
+    <button onclick="document.getElementById('tg-setup').style.display='none'" style="background:#30363d;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;margin-left:6px">닫기</button>
+    <span id="tg-setup-status" style="margin-left:10px;font-size:12px"></span>
+  </div>
+  <div id="alert-status" style="margin-top:6px;font-size:0.8em;color:#666">마지막 알림: 없음</div>
+</div>
+
+<div class="toast" id="toast">📋 복사 완료!</div>
+
+<script>
+// ===== 설정 =====
+const SYMBOL = 'KRW-ETH';
+const UPDATE_INTERVAL = 60000; // 1분
+let chart, candleSeries, currentInterval = 'minutes60';
+
+// 로컬스토리지 키
+const LS_POSITION = 'eth_position';
+const LS_SIGNALS = 'eth_signals';
+
+// ===== 알림 시스템 =====
+const ALERT_CONFIG = {
+  enabled: true,
+  // 알림 발동 기준 점수 (절대값)
+  strongThreshold: 15,   // ±15 이상 → 매수/매도 알림
+  criticalThreshold: 30, // ±30 이상 → 강력 매수/매도 알림
+  // 같은 신호 반복 알림 방지 (분)
+  cooldownMinutes: 30,
+  // 텔레그램 설정 (localStorage에서 로드, 초기 설정은 ⚙️ 버튼으로)
+  telegramBotToken: localStorage.getItem('tg_bot_token') || '',
+  telegramChatId: localStorage.getItem('tg_chat_id') || '',
+  // 알림 방법
+  useBrowserNotification: true,
+  useSound: true,
+  useTelegram: true,
+};
+
+let lastAlertTime = 0;
+let lastAlertAction = '';
+
+// 브라우저 알림 권한 요청
+if (ALERT_CONFIG.useBrowserNotification && 'Notification' in window) {
+  Notification.requestPermission();
+}
+
+// 알림 사운드 생성 (Web Audio API, 외부 파일 불필요)
+function playAlertSound(type) {
+  if (!ALERT_CONFIG.useSound) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    if (type === 'critical') {
+      // 긴급: 높은 음 3연타
+      osc.frequency.value = 880;
+      gain.gain.value = 0.3;
+      osc.start();
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(1100, ctx.currentTime + 0.15);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.3);
+      osc.stop(ctx.currentTime + 0.45);
+    } else {
+      // 일반: 부드러운 알림음
+      osc.frequency.value = 660;
+      gain.gain.value = 0.2;
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    }
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+  } catch(e) { console.log('Sound error:', e); }
+}
+
+// 브라우저 알림
+function showBrowserNotification(title, body, isCritical) {
+  if (!ALERT_CONFIG.useBrowserNotification) return;
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const n = new Notification(title, {
+      body: body,
+      icon: isCritical ? '🚨' : '📊',
+      tag: 'eth-score-alert',
+      requireInteraction: isCritical, // 긴급이면 자동으로 안 사라짐
+    });
+    // 클릭하면 대시보드로 포커스
+    n.onclick = () => { window.focus(); n.close(); };
+    if (!isCritical) setTimeout(() => n.close(), 10000);
+  }
+}
+
+// 텔레그램 알림
+async function sendTelegramAlert(message) {
+  if (!ALERT_CONFIG.useTelegram) return;
+  const {telegramBotToken, telegramChatId} = ALERT_CONFIG;
+  if (!telegramBotToken || !telegramChatId) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        chat_id: telegramChatId,
+        text: message,
+        parse_mode: 'HTML',
+      }),
+    });
+  } catch(e) { console.error('Telegram alert error:', e); }
+}
+
+// 메인 알림 체크
+function checkAndAlert(total, action, scores, weighted) {
+  const absScore = Math.abs(total);
+  const now = Date.now();
+  const cooldown = ALERT_CONFIG.cooldownMinutes * 60 * 1000;
+
+  // 기준 미달 → 알림 안 함
+  if (absScore < ALERT_CONFIG.strongThreshold) {
+    lastAlertAction = '';
+    return;
+  }
+
+  // 같은 신호가 쿨다운 내에 또 왔으면 무시
+  if (action === lastAlertAction && (now - lastAlertTime) < cooldown) return;
+
+  const isCritical = absScore >= ALERT_CONFIG.criticalThreshold;
+  const isBuy = total > 0;
+  const priceStr = lastPrice ? lastPrice.toLocaleString() + '원' : '?';
+  const timeStr = new Date().toLocaleTimeString('ko-KR');
+
+  // 상위 3개 근거
+  const nameMap = {rsi:'RSI', macd:'MACD', ma:'이동평균', bollinger:'볼린저', fear_greed:'공포탐욕', funding:'펀딩비', pnl:'현재손익'};
+  const topReasons = Object.entries(weighted)
+    .sort((a,b) => Math.abs(b[1]) - Math.abs(a[1]))
+    .slice(0, 3)
+    .map(([k,v]) => `${nameMap[k]||k}: ${scores[k]>=0?'+':''}${scores[k]}×${(WEIGHTS[k]*100).toFixed(0)}%=${v>=0?'+':''}${v}`)
+    .join('\n  ');
+
+  // 알림 제목/본문
+  const emoji = isCritical ? (isBuy ? '🚨🟢' : '🚨🔴') : (isBuy ? '📈🟢' : '📉🔴');
+  const title = `${emoji} ETH ${action} (${total>=0?'+':''}${total.toFixed(1)})`;
+  const body = `ETH ${priceStr} | ${timeStr}\n근거:\n  ${topReasons}`;
+
+  // 1) 브라우저 알림
+  showBrowserNotification(title, body, isCritical);
+
+  // 2) 사운드
+  playAlertSound(isCritical ? 'critical' : 'normal');
+
+  // 3) 텔레그램
+  const tgMsg = `${emoji} <b>ETH ${action}</b> (점수: ${total>=0?'+':''}${total.toFixed(1)})\n`
+    + `━━━━━━━━━━━━━━━━━━\n`
+    + `현재가: ${priceStr}\n`
+    + `시간: ${timeStr}\n\n`
+    + `📊 주요 근거:\n  ${topReasons}\n\n`
+    + (isCritical ? '⚡ <b>강한 신호입니다. 확인하세요!</b>' : '💡 대시보드에서 상세 확인하세요.');
+  sendTelegramAlert(tgMsg);
+
+  // 쿨다운 기록
+  lastAlertTime = now;
+  lastAlertAction = action;
+  console.log(`[ALERT] ${title}`);
+}
+
+// ===== 포지션 (수동 설정 또는 API에서 가져온 값) =====
+let position = JSON.parse(localStorage.getItem(LS_POSITION)) || {
+  avg_price: 3097176, eth: 0.9996, krw: 2617944
+};
+
+// ===== Upbit API =====
+async function fetchPrice() {
+  try {
+    const r = await fetch(`https://api.upbit.com/v1/ticker?markets=${SYMBOL}`);
+    const d = await r.json();
+    return d[0];
+  } catch(e) { console.error(e); return null; }
+}
+
+async function fetchCandles(interval, count=200) {
+  let url;
+  if (interval === 'days') {
+    url = `https://api.upbit.com/v1/candles/days?market=${SYMBOL}&count=${count}`;
+  } else if (interval === 'minutes240') {
+    url = `https://api.upbit.com/v1/candles/minutes/240?market=${SYMBOL}&count=${count}`;
+  } else {
+    url = `https://api.upbit.com/v1/candles/minutes/60?market=${SYMBOL}&count=${count}`;
+  }
+  const r = await fetch(url);
+  const d = await r.json();
+  return d.reverse().map(c => ({
+    time: new Date(c.candle_date_time_kst || c.candle_date_time_utc).getTime()/1000,
+    open: c.opening_price, high: c.high_price,
+    low: c.low_price, close: c.trade_price
+  }));
+}
+
+async function fetchFearGreed() {
+  try {
+    const r = await fetch('https://api.alternative.me/fng/?limit=1');
+    const d = await r.json();
+    return d.data[0];
+  } catch(e) { return {value:'?', value_classification:'N/A'}; }
+}
+
+// ===== 지표 계산 =====
+function calcRSI(closes, period=14) {
+  if (closes.length < period+1) return null;
+  let gains=0, losses=0;
+  for (let i=closes.length-period; i<closes.length; i++) {
+    const d = closes[i] - closes[i-1];
+    if (d>0) gains+=d; else losses-=d;
+  }
+  gains /= period; losses /= period;
+  if (losses===0) return 100;
+  return 100 - 100/(1+gains/losses);
+}
+
+function calcMACD(closes) {
+  const ema = (data,p) => {
+    const k=2/(p+1); let e=[data[0]];
+    for(let i=1;i<data.length;i++) e.push(data[i]*k+e[i-1]*(1-k));
+    return e;
+  };
+  const e12=ema(closes,12), e26=ema(closes,26);
+  const macd=e12.map((v,i)=>v-e26[i]);
+  const sig=ema(macd,9);
+  const n=closes.length-1;
+  return {macd:macd[n], signal:sig[n], hist:macd[n]-sig[n]};
+}
+
+function calcMA(closes, period) {
+  if(closes.length<period) return null;
+  const s=closes.slice(-period);
+  return s.reduce((a,b)=>a+b,0)/period;
+}
+
+// ===== UI 업데이트 =====
+function updatePrice(ticker) {
+  if (!ticker) return;
+  const price = ticker.trade_price;
+  const change = ticker.signed_change_rate * 100;
+
+  document.getElementById('price').textContent = price.toLocaleString() + '원';
+  const changeEl = document.getElementById('price-change');
+  changeEl.textContent = `${change>=0?'+':''}${change.toFixed(2)}% (24h)`;
+  changeEl.style.color = change>=0 ? 'var(--green)' : 'var(--red)';
+
+  // 손익
+  const avg = position.avg_price;
+  const pnl_pct = avg ? ((price-avg)/avg*100) : 0;
+  const pnl_krw = avg ? (price-avg)*position.eth : 0;
+  const eth_value = position.eth * price;
+  const total = position.krw + eth_value;
+
+  const pnlEl = document.getElementById('pnl-pct');
+  pnlEl.textContent = `${pnl_pct>=0?'+':''}${pnl_pct.toFixed(2)}%`;
+  pnlEl.style.color = pnl_pct>=0 ? 'var(--green)' : 'var(--red)';
+
+  document.getElementById('pnl-krw').textContent = `${pnl_krw>=0?'+':''}${Math.round(pnl_krw).toLocaleString()}원`;
+  document.getElementById('total-asset').textContent = Math.round(total).toLocaleString() + '원';
+  document.getElementById('eth-ratio').textContent = `ETH ${(eth_value/total*100).toFixed(1)}% | KRW ${(position.krw/total*100).toFixed(1)}%`;
+
+  // 손익 바 (-7% ~ +15%)
+  updatePnlBar(pnl_pct);
+
+  lastPrice = price;
+  document.getElementById('update-time').textContent = new Date().toLocaleTimeString('ko-KR');
+}
+
+function updatePnlBar(pnl_pct) {
+  const min=-7, max=15;
+  const pct = Math.max(0, Math.min(100, (pnl_pct-min)/(max-min)*100));
+  const fill = document.getElementById('pnl-bar-fill');
+  fill.style.width = pct+'%';
+
+  if (pnl_pct <= -7) { fill.style.background='var(--red)'; }
+  else if (pnl_pct < 0) { fill.style.background='linear-gradient(90deg, var(--red), var(--yellow))'; }
+  else if (pnl_pct < 10) { fill.style.background='linear-gradient(90deg, var(--yellow), var(--green))'; }
+  else { fill.style.background='var(--green)'; }
+
+  const label = document.getElementById('pnl-bar-label');
+  label.textContent = `${pnl_pct>=0?'+':''}${pnl_pct.toFixed(2)}%`;
+  label.style.color = pnl_pct>=0 ? 'var(--green)' : 'var(--red)';
+}
+
+// 마지막 계산된 지표값 캐시
+let cachedIndicators = {};
+
+function updateIndicators(closes, rsi4hVal) {
+  if (!closes || closes.length < 200) return;
+
+  const rsiDay = calcRSI(closes);
+  const macdData = calcMACD(closes);
+  const ma50 = calcMA(closes, 50);
+  const ma200 = calcMA(closes, 200);
+
+  // BB 계산
+  const bbSlice = closes.slice(-20);
+  const bbMa = bbSlice.reduce((a,b)=>a+b,0)/20;
+  const bbStd = Math.sqrt(bbSlice.reduce((a,b)=>a+(b-bbMa)**2,0)/20);
+  const bbUpper = bbMa+2*bbStd, bbLower = bbMa-2*bbStd;
+
+  cachedIndicators = {rsiDay, rsi4h: rsi4hVal||cachedIndicators.rsi4h||50, macd:macdData.macd, signal:macdData.signal, hist:macdData.hist, ma50, ma200, bbUpper, bbLower};
+
+  const setVal = (id, val, color) => {
+    const el = document.getElementById(id);
+    el.textContent = typeof val==='number' ? val.toLocaleString(undefined,{maximumFractionDigits:1}) : val;
+    if (color) el.style.color = color;
+  };
+
+  const rsiColor = rsiDay>70?'var(--red)':rsiDay<30?'var(--green)':'var(--text)';
+  setVal('rsi-day', rsiDay?.toFixed(1)||'-', rsiColor);
+  setVal('macd', Math.round(macdData.macd).toLocaleString(), macdData.hist>0?'var(--green)':'var(--red)');
+  setVal('ma50', Math.round(ma50)?.toLocaleString()||'-');
+  setVal('ma200', Math.round(ma200)?.toLocaleString()||'-');
+  setVal('golden', ma50>ma200?'Yes ✅':'No ❌', ma50>ma200?'var(--green)':'var(--red)');
+
+  // 스코어링 자동 계산 (펀딩비 포함)
+  if (lastPrice && cachedIndicators.rsiDay) {
+    const avg = position.avg_price;
+    const pnlPct = avg ? ((lastPrice-avg)/avg*100) : 0;
+    const fgVal = parseInt(document.getElementById('fg-value').textContent) || 50;
+    const result = calculateScore(
+      lastPrice, cachedIndicators.rsiDay, cachedIndicators.rsi4h,
+      cachedIndicators.macd, cachedIndicators.signal, cachedIndicators.hist,
+      cachedIndicators.ma50, cachedIndicators.ma200,
+      cachedIndicators.bbUpper, cachedIndicators.bbLower,
+      fgVal, pnlPct, cachedFundingRate
+    );
+    updateScoreUI(result);
+  }
+}
+
+function updateFearGreed(fg) {
+  const val = parseInt(fg.value);
+  document.getElementById('fg-value').textContent = val;
+  document.getElementById('fg-label').textContent = fg.value_classification;
+  const el = document.getElementById('fg-value');
+  if (val<=25) el.style.color='var(--red)';
+  else if (val<=45) el.style.color='var(--yellow)';
+  else if (val<=55) el.style.color='var(--text)';
+  else if (val<=75) el.style.color='var(--green)';
+  else el.style.color='var(--green)';
+}
+
+// ===== 차트 =====
+function initChart() {
+  const container = document.getElementById('chart-container');
+  chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth, height: 400,
+    layout: { background:{color:'#161b22'}, textColor:'#8b949e' },
+    grid: { vertLines:{color:'#21262d'}, horzLines:{color:'#21262d'} },
+    crosshair: { mode: 0 },
+    timeScale: { timeVisible:true, secondsVisible:false },
+  });
+  candleSeries = chart.addCandlestickSeries({
+    upColor:'#3fb950', downColor:'#f85149',
+    borderUpColor:'#3fb950', borderDownColor:'#f85149',
+    wickUpColor:'#3fb950', wickDownColor:'#f85149',
+  });
+  window.addEventListener('resize', () => chart.applyOptions({width:container.clientWidth}));
+}
+
+async function loadChart(interval) {
+  currentInterval = interval;
+  const data = await fetchCandles(interval);
+  candleSeries.setData(data);
+  chart.timeScale().fitContent();
+
+  // 일봉이면 지표도 업데이트
+  if (interval === 'days') {
+    updateIndicators(data.map(d=>d.close));
+  }
+}
+
+// ===== 스코어링 엔진 (Python scoring_engine.py 미러) =====
+// v2.1 가중치 (기술적65% > 심리25% > 리스크10%)
+const WEIGHTS = {rsi:0.20, macd:0.20, ma:0.17, bollinger:0.08, fear_greed:0.15, funding:0.10, pnl:0.10};
+
+// 선형 보간 유틸
+function lerpTable(table, x) {
+  if (x<=table[0][0]) return table[0][1];
+  if (x>=table[table.length-1][0]) return table[table.length-1][1];
+  for (let i=0;i<table.length-1;i++) {
+    const [x0,y0]=table[i],[x1,y1]=table[i+1];
+    if (x0<=x&&x<=x1) return Math.round(y0+(x-x0)/(x1-x0)*(y1-y0));
+  }
+  return 0;
+}
+
+function scoreRSI(rsiDay, rsi4h) {
+  const t=[[20,100],[25,80],[30,50],[35,25],[40,10],[45,0],[50,0],[55,0],[60,-10],[65,-25],[70,-50],[75,-80],[80,-100]];
+  return Math.round(lerpTable(t,rsiDay)*0.6 + lerpTable(t,rsi4h)*0.4);
+}
+function scoreMACD(macd, signal, hist) {
+  let s=0;
+  s += hist>0?40:-40;
+  s += macd>signal?30:-30;
+  if(Math.abs(hist)>Math.abs(signal)*0.5) s += hist>0?30:-30;
+  return Math.max(-100,Math.min(100,s));
+}
+function scoreMA(price, ma50, ma200) {
+  let s=0;
+  s += ma50>ma200?40:-40;
+  s += price>ma50?20:-20;
+  s += price>ma200?20:-20;
+  const gap=ma50?(price-ma50)/ma50*100:0;
+  if(gap>15) s-=20; else if(gap<-15) s+=20;
+  return Math.max(-100,Math.min(100,s));
+}
+function scoreBollinger(price, upper, lower) {
+  if(upper===lower) return 0;
+  const pos=(price-lower)/(upper-lower);
+  if(pos>=1) return -80;
+  if(pos>=0.85) return Math.round(-50-(pos-0.85)/0.15*30);
+  if(pos<=0) return 80;
+  if(pos<=0.15) return Math.round(50+(0.15-pos)/0.15*30);
+  return Math.round(50-(pos-0.15)/0.70*100);
+}
+function scoreFearGreed(val) {
+  // v2.1: 0~8 극단 패닉 강화
+  const t=[[0,100],[5,98],[8,95],[10,90],[15,75],[20,60],[25,50],[30,35],[35,20],[40,10],[45,5],[50,0],
+           [55,-5],[60,-15],[65,-30],[70,-40],[75,-55],[80,-70],[85,-80],[90,-90],[100,-100]];
+  return lerpTable(t,val);
+}
+function scoreFunding(rate) {
+  if(rate===null||rate===undefined) return 0;
+  const t=[[-0.02,100],[-0.01,80],[-0.005,40],[-0.001,15],[0,5],[0.0001,-5],[0.001,-15],[0.005,-40],[0.01,-80],[0.02,-100]];
+  return lerpTable(t,rate);
+}
+function scorePnl(pct) {
+  const t=[[-10,-100],[-7,-100],[-5,-70],[-3,-30],[-1,0],[0,10],[3,15],[5,10],[7,5],[10,-10],[12,-30],[15,-80],[20,-100]];
+  return lerpTable(t,pct);
+}
+
+function calculateScore(price, rsiDay, rsi4h, macdVal, macdSig, macdHist, ma50, ma200, bbUpper, bbLower, fgVal, pnlPct, fundingRate) {
+  const scores = {
+    rsi: scoreRSI(rsiDay, rsi4h),
+    macd: scoreMACD(macdVal, macdSig, macdHist),
+    ma: scoreMA(price, ma50, ma200),
+    bollinger: scoreBollinger(price, bbUpper, bbLower),
+    fear_greed: scoreFearGreed(fgVal),
+    funding: scoreFunding(fundingRate),
+    pnl: scorePnl(pnlPct),
+  };
+  const weighted = {};
+  let total = 0;
+  for (const [k,v] of Object.entries(scores)) {
+    const w = WEIGHTS[k]||0;
+    weighted[k] = +(v*w).toFixed(1);
+    total += weighted[k];
+  }
+  total = +total.toFixed(1);
+
+  // 7단계 판단 (v2.1: 홀드 -7~+7)
+  let action, emoji;
+  if(total>=30){action='강력 매수';emoji='🟢🟢';}
+  else if(total>=15){action='매수';emoji='🟢';}
+  else if(total>=8){action='약매수';emoji='🟢';}
+  else if(total>=-7){action='홀드';emoji='🟡';}
+  else if(total>=-14){action='약매도';emoji='🔴';}
+  else if(total>=-29){action='매도';emoji='🔴';}
+  else{action='강력 매도';emoji='🔴🔴';}
+
+  return {scores, weighted, total, action, emoji};
+}
+
+function updateScoreUI(result) {
+  const {total, action, emoji, scores, weighted} = result;
+  const pct = (total+100)/200*100;
+  const fill = document.getElementById('score-fill');
+  fill.style.width = pct+'%';
+  if(total>=8) fill.style.background='var(--green)';
+  else if(total>=-7) fill.style.background='var(--yellow)';
+  else fill.style.background='var(--red)';
+
+  const valEl = document.getElementById('score-value');
+  valEl.textContent = (total>=0?'+':'')+total.toFixed(1);
+  valEl.style.color = total>=8?'var(--green)':total>=-7?'var(--yellow)':'var(--red)';
+  document.getElementById('score-action').textContent = `${emoji} ${action}`;
+
+  // 판단 구간 안내
+  const guideMap = {rsi:'RSI', macd:'MACD', ma:'이동평균', bollinger:'볼린저', fear_greed:'공포탐욕', funding:'펀딩비', pnl:'현재손익'};
+  const reasonMap = {
+    rsi:'(RSI 20=+100, 30=+50, 50=0, 70=-50, 80=-100)',
+    macd:'(hist방향+크로스+모멘텀강도)',
+    ma:'(골든크로스+가격위치+괴리율15%)',
+    bollinger:'(밴드위치: 하단=+80, 중앙=0, 상단=-80)',
+    fear_greed:'(역발상: FG0=+100, 8=+95, 12=+87, 25=+50, 50=0)',
+    funding:'(숏과열=+80, 중립=0, 롱과열=-80)',
+    pnl:'(본전+10, 수익+15, 익절근접-30, 손절-100)',
+  };
+  const details = Object.entries(weighted)
+    .sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]))
+    .map(([k,v])=>{
+      const raw = scores[k];
+      const w = WEIGHTS[k];
+      const color = v>=0?'var(--green)':'var(--red)';
+      const reason = reasonMap[k]||'';
+      return `<span style="color:var(--dim)">${guideMap[k]||k}</span> <span style="color:${color}">${raw>=0?'+':''}${raw}</span> x ${(w*100).toFixed(0)}% = <b style="color:${color}">${v>=0?'+':''}${v}</b> <span style="color:#555;font-size:0.75em">${reason}</span>`;
+    }).join('<br>');
+  const scaleGuide = '<div style="margin-top:6px;padding-top:6px;border-top:1px solid #333;color:#666;font-size:0.75em">구간: 강매수 +30이상 | 매수 +15~29 | 약매수 +8~14 | <b style="color:var(--yellow)">홀드 -7~+7</b> | 약매도 -8~-14 | 매도 -15~-29 | 강매도 -30이하</div>';
+  document.getElementById('score-details').innerHTML = details + scaleGuide;
+
+  // 자동으로 신호 기록 (5분마다)
+  const lastLog = parseInt(localStorage.getItem('last_score_log')||'0');
+  if (Date.now() - lastLog > 300000) {
+    addSignal(lastPrice, total, action);
+    localStorage.setItem('last_score_log', Date.now().toString());
+  }
+
+  // 강한 신호 시 알림 발동
+  checkAndAlert(total, action, scores, weighted);
+
+  // 알림 상태 업데이트
+  const statusEl = document.getElementById('alert-status');
+  if (statusEl) {
+    if (lastAlertTime > 0) {
+      const ago = Math.round((Date.now()-lastAlertTime)/60000);
+      statusEl.textContent = `마지막 알림: ${lastAlertAction} (${ago}분 전)`;
+      statusEl.style.color = lastAlertAction.includes('매수') ? 'var(--green)' : lastAlertAction.includes('매도') ? 'var(--red)' : '#666';
+    }
+  }
+}
+
+// 테스트 알림 함수
+function testAlert() {
+  const priceStr = lastPrice ? lastPrice.toLocaleString()+'원' : '테스트';
+  const testMsg = `🔔 <b>알림 테스트</b>\nETH ${priceStr}\n현재 스코어링 정상 작동 중`;
+
+  showBrowserNotification('🔔 ETH 알림 테스트', `현재가: ${priceStr}\n알림 시스템 정상 작동`, false);
+  playAlertSound('normal');
+  sendTelegramAlert(testMsg);
+
+  const toast = document.getElementById('toast');
+  toast.textContent = '🔔 테스트 알림 발송 완료! (브라우저 + 소리 + 텔레그램)';
+  toast.style.display = 'block';
+  setTimeout(() => toast.style.display='none', 3000);
+}
+
+let lastPrice = 0;
+let cachedFundingRate = null;
+
+// ===== 텔레그램 설정 UI =====
+function showTgSetup() {
+  const el = document.getElementById('tg-setup');
+  el.style.display = el.style.display==='none'?'block':'none';
+  document.getElementById('tg-token-input').value = localStorage.getItem('tg_bot_token')||'';
+  document.getElementById('tg-chatid-input').value = localStorage.getItem('tg_chat_id')||'';
+}
+
+function saveTgSetup() {
+  const token = document.getElementById('tg-token-input').value.trim();
+  const chatId = document.getElementById('tg-chatid-input').value.trim();
+  if (!token || !chatId) {
+    document.getElementById('tg-setup-status').textContent = '❌ 둘 다 입력하세요';
+    return;
+  }
+  localStorage.setItem('tg_bot_token', token);
+  localStorage.setItem('tg_chat_id', chatId);
+  ALERT_CONFIG.telegramBotToken = token;
+  ALERT_CONFIG.telegramChatId = chatId;
+  document.getElementById('tg-setup-status').textContent = '✅ 저장됨!';
+  document.getElementById('tg-setup').style.display = 'none';
+}
+
+async function fetchFundingRate() {
+  try {
+    const r = await fetch('https://fapi.binance.com/fapi/v1/fundingRate?symbol=ETHUSDT&limit=1');
+    const d = await r.json();
+    if(d&&d[0]) { cachedFundingRate=parseFloat(d[0].fundingRate); }
+  } catch(e) { cachedFundingRate=null; }
+}
+
+// ===== 신호 로그 =====
+function loadSignals() {
+  const signals = JSON.parse(localStorage.getItem(LS_SIGNALS) || '[]');
+  const container = document.getElementById('signal-log');
+  if (!signals.length) return;
+
+  container.innerHTML = signals.slice(-15).reverse().map(s =>
+    `<div class="log-entry">
+      <span class="log-time">${s.time}</span>
+      <span style="margin-left:8px">${s.price}원</span>
+      <span style="margin-left:8px;color:${s.score>=0?'var(--green)':'var(--red)'}">
+        ${s.score>=0?'+':''}${s.score} ${s.action}
+      </span>
+    </div>`
+  ).join('');
+}
+
+function addSignal(price, score, action) {
+  const signals = JSON.parse(localStorage.getItem(LS_SIGNALS) || '[]');
+  signals.push({
+    time: new Date().toLocaleString('ko-KR'),
+    price: Math.round(price).toLocaleString(),
+    score, action
+  });
+  if (signals.length > 100) signals.splice(0, signals.length-100);
+  localStorage.setItem(LS_SIGNALS, JSON.stringify(signals));
+  loadSignals();
+}
+
+// ===== 유틸 =====
+function copyCmd(cmd) {
+  navigator.clipboard.writeText(cmd).then(() => {
+    const toast = document.getElementById('toast');
+    toast.textContent = `📋 "${cmd}" 복사됨 → 텔레그램에 붙여넣기`;
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display='none', 2000);
+  });
+}
+
+// ===== 탭 전환 =====
+document.querySelectorAll('.chart-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.chart-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    loadChart(tab.dataset.interval);
+  });
+});
+
+// ===== 메인 루프 =====
+async function update() {
+  const [ticker, fg] = await Promise.all([fetchPrice(), fetchFearGreed()]);
+  updatePrice(ticker);
+  updateFearGreed(fg);
+}
+
+async function init() {
+  initChart();
+  await loadChart('minutes60');
+
+  // 일봉 + 4시간 + 펀딩비 동시 로드
+  const [dayData, h4Data] = await Promise.all([
+    fetchCandles('days', 200),
+    fetchCandles('minutes240', 200),
+    fetchFundingRate()
+  ]);
+  const rsi4h = calcRSI(h4Data.map(d=>d.close));
+  document.getElementById('rsi-4h').textContent = rsi4h?.toFixed(1)||'-';
+
+  // 일봉 지표 + 스코어링 계산 (4시간 RSI + 펀딩비 전달)
+  updateIndicators(dayData.map(d=>d.close), rsi4h);
+
+  await update();
+  loadSignals();
+  setInterval(update, UPDATE_INTERVAL);
+  // 5분마다 차트+지표+스코어+펀딩비 갱신
+  setInterval(async () => {
+    await loadChart(currentInterval);
+    const [dd, hd] = await Promise.all([fetchCandles('days',200), fetchCandles('minutes240',200), fetchFundingRate()]);
+    const r4h = calcRSI(hd.map(d=>d.close));
+    document.getElementById('rsi-4h').textContent = r4h?.toFixed(1)||'-';
+    updateIndicators(dd.map(d=>d.close), r4h);
+  }, UPDATE_INTERVAL * 5);
+}
+
+init();
+</script>
+</body>
+</html>
