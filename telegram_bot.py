@@ -10,10 +10,15 @@ _BASE = pathlib.Path(__file__).parent
 load_dotenv(_BASE / 'config' / '.env')
 logging.basicConfig(level=logging.INFO)
 
-from order_executor import (
-    get_balance_krw, get_balance_eth, get_avg_buy_price,
-    buy_eth_krw, sell_eth_ratio, sell_eth_all
-)
+from order_executor import OrderExecutor
+
+_executor = OrderExecutor()
+get_balance_krw = _executor.get_balance_krw
+get_balance_eth = _executor.get_balance_eth
+get_avg_buy_price = _executor.get_avg_buy_price
+buy_eth_krw = _executor.buy_eth_krw
+sell_eth_ratio = _executor.sell_eth_ratio
+sell_eth_all = _executor.sell_eth_all
 from market_monitor import get_current_price
 from ai_analyst import run_full_analysis
 from risk_manager import calc_position, check_stop_loss, check_take_profit
