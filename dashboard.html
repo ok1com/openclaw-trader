@@ -581,6 +581,13 @@ function updateIndicators(closes, rsi4hVal, dayCandles) {
   setVal('ma200', Math.round(ma200)?.toLocaleString()||'-');
   setVal('golden', ma50>ma200?'Yes ✅':'No ❌', ma50>ma200?'var(--green)':'var(--red)');
 
+  // ATR 계산 (dayCandles가 있을 때)
+  let atrVal = null;
+  if (dayCandles && dayCandles.length > 15) {
+    atrVal = calcATR(dayCandles);
+    cachedIndicators.atr = atrVal;
+  }
+
   // 스코어링 자동 계산 (펀딩비 포함)
   if (lastPrice && cachedIndicators.rsiDay) {
     const avg = position.avg_price;
@@ -594,6 +601,11 @@ function updateIndicators(closes, rsi4hVal, dayCandles) {
       fgVal, pnlPct, cachedFundingRate
     );
     updateScoreUI(result);
+
+    // 리스크 메트릭 업데이트
+    if (cachedIndicators.atr) {
+      updateRiskMetrics(lastPrice, cachedIndicators.atr, result.total);
+    }
   }
 }
 
