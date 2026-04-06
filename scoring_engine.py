@@ -315,6 +315,29 @@ def calculate_final_score(tech, fg, funding_rate, pnl_pct):
     # 근거 정렬 (기여도 순)
     reasons = sorted(weighted.items(), key=lambda x: abs(x[1]), reverse=True)
 
+    # ATR 기반 리스크 메트릭 (tech에 atr_day가 있을 때만)
+    risk_metrics = {}
+    atr = tech.get('atr_day', 0)
+    price = tech.get('price', 0)
+    if atr and price:
+        atr_stop = calc_atr_stop(price, atr)
+        # 익절 타겟: ATR의 4배 (R:R ≥ 2 확보)
+        target = round(price + atr * 4)
+        rr = calc_risk_reward(price, atr_stop['stop_price'], target)
+
+        # 승률 추정 (스코어 기반: +50→65%, 0→50%, -50→35%)
+        est_win_rate = max(0.30, min(0.70, 0.50 + final_score / 200))
+
+        total_capital = tech.get('total_capital', 5_000_000)
+        kelly = calc_kelly_position(est_win_rate, rr['rr_ratio'], total_capital)
+
+        risk_metrics = {
+            "atr_stop": atr_stop,
+            "risk_reward": rr,
+            "kelly": kelly,
+            "timeframe_note": "기준: 일봉(방향) + 4H(진입) | 주간(확인)"
+        }
+
     return {
         "scores": scores,
         "weighted": weighted,
@@ -323,6 +346,7 @@ def calculate_final_score(tech, fg, funding_rate, pnl_pct):
         "action": action,
         "emoji": emoji,
         "top_reasons": reasons[:7],
+        "risk_metrics": risk_metrics,
     }
 
 
@@ -418,4 +442,33 @@ def format_score_report(result):
 
     lines.append("")
     lines.append(f"종합: {result['final_score']:+.1f} / ±100")
+
+    # 리스크 메트릭 표시
+    rm = result.get('risk_metrics', {})
+    if rm:
+        lines.append("")
+        lines.append("━" * 35)
+        lines.append("📐 리스크 관리 메트릭")
+        lines.append("━" * 35)
+
+        atr_s = rm.get('atr_stop', {})
+        if atr_s:
+            lines.append(f"  ATR(14일): {atr_s.get('atr', 0):,}원")
+            lines.append(f"  ATR 손절가: {atr_s.get('stop_price', 0):,}원 ({atr_s.get('stop_pct', 0):+.1f}%)")
+
+        rr = rm.get('risk_reward', {})
+        if rr:
+            ok = "✅" if rr.get('acceptable') else "⚠️"
+            lines.append(f"  R:R 비율: {rr.get('rr_ratio', 0):.2f}:1 {ok} (권장 ≥2:1)")
+            lines.append(f"  진입→손절: {rr.get('risk', 0):,}원 | 진입→익절: {rr.get('reward', 0):,}원")
+
+        kelly = rm.get('kelly', {})
+        if kelly:
+            lines.append(f"  Kelly 포지션: {kelly.get('position_krw', 0):,}원 (Half Kelly: {kelly.get('kelly_fraction', 0)*100:.1f}%)")
+            lines.append(f"  1회 최대 손실: {kelly.get('max_loss_krw', 0):,}원 (자산의 {kelly.get('risk_pct', 0)*100:.0f}%)")
+
+        tf = rm.get('timeframe_note', '')
+        if tf:
+            lines.append(f"  ⏰ {tf}")
+
     return "\n".join(lines)
