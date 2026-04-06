@@ -138,6 +138,17 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
       </div>
     </div>
 
+    <!-- 리스크 메트릭 -->
+    <div class="card">
+      <div class="card-title">📐 리스크 관리</div>
+      <div class="indicator"><span class="ind-label">ATR(14)</span><span class="ind-value" id="atr-val">-</span></div>
+      <div class="indicator"><span class="ind-label">ATR 손절가</span><span class="ind-value" id="atr-stop" style="color:var(--red)">-</span></div>
+      <div class="indicator"><span class="ind-label">R:R 비율</span><span class="ind-value" id="rr-ratio">-</span></div>
+      <div class="indicator"><span class="ind-label">Kelly 포지션</span><span class="ind-value" id="kelly-pos">-</span></div>
+      <div class="indicator"><span class="ind-label">최대손실</span><span class="ind-value" id="max-loss" style="color:var(--red)">-</span></div>
+      <div style="margin-top:6px;font-size:10px;color:var(--dim)" id="tf-note">기준: 일봉(방향) + 4H(진입)</div>
+    </div>
+
     <!-- 매매 버튼 -->
     <div class="card">
       <div class="card-title">매매 실행</div>
