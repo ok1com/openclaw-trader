@@ -11,7 +11,6 @@ from market_monitor import scan_all_stocks, get_stock_data
 from ai_analyst import analyze_stock, analyze_signals
 from risk_manager import RiskManager
 from order_executor import OrderExecutor, format_order_message
-from telegram_bot import TelegramBot
 
 
 def run_trading_pipeline():
