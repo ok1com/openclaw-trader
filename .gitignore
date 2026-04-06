@@ -13,6 +13,7 @@ __pycache__/
 # 로그 & 데이터
 logs/*.log
 data/*.json
+!data/balance.json
 data/*.csv
 
 # 내부 문서
