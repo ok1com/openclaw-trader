@@ -863,6 +863,57 @@ function testAlert() {
 let lastPrice = 0;
 let cachedFundingRate = null;
 
+// ===== 잔고 모달 =====
+function showBalance() {
+  const modal = document.getElementById('balance-modal');
+  modal.style.display = 'flex';
+  document.getElementById('bal-avg').value = position.avg_price;
+  document.getElementById('bal-eth').value = position.eth;
+  document.getElementById('bal-krw').value = position.krw;
+  updateBalanceDisplay();
+}
+
+function closeBalance() {
+  document.getElementById('balance-modal').style.display = 'none';
+}
+
+function updateBalanceDisplay() {
+  const price = lastPrice || 0;
+  const ethVal = position.eth * price;
+  const total = position.krw + ethVal;
+  const pnl = position.avg_price ? ((price - position.avg_price) / position.avg_price * 100) : 0;
+  const pnlKrw = position.avg_price ? (price - position.avg_price) * position.eth : 0;
+
+  document.getElementById('bal-total').textContent = Math.round(total).toLocaleString() + '원';
+  document.getElementById('bal-eth-val').textContent = Math.round(ethVal).toLocaleString() + '원 (' + position.eth.toFixed(4) + ' ETH)';
+  const pnlEl = document.getElementById('bal-pnl');
+  pnlEl.textContent = `${pnl>=0?'+':''}${pnl.toFixed(2)}% (${pnlKrw>=0?'+':''}${Math.round(pnlKrw).toLocaleString()}원)`;
+  pnlEl.style.color = pnl >= 0 ? 'var(--green)' : 'var(--red)';
+}
+
+function saveBalance() {
+  const avg = parseFloat(document.getElementById('bal-avg').value);
+  const eth = parseFloat(document.getElementById('bal-eth').value);
+  const krw = parseFloat(document.getElementById('bal-krw').value);
+  if (isNaN(avg) || isNaN(eth) || isNaN(krw)) {
+    document.getElementById('bal-status').textContent = '❌ 숫자를 정확히 입력하세요';
+    document.getElementById('bal-status').style.color = 'var(--red)';
+    return;
+  }
+  position.avg_price = avg;
+  position.eth = eth;
+  position.krw = krw;
+  localStorage.setItem(LS_POSITION, JSON.stringify(position));
+  updateBalanceDisplay();
+  // 대시보드 즉시 반영
+  if (lastPrice) {
+    updatePrice({trade_price: lastPrice, signed_change_rate: lastChangeRate || 0});
+  }
+  document.getElementById('bal-status').textContent = '✅ 저장 완료! 대시보드에 반영됨';
+  document.getElementById('bal-status').style.color = 'var(--green)';
+  setTimeout(() => { document.getElementById('bal-status').textContent = ''; }, 2000);
+}
+
 // ===== 텔레그램 설정 UI =====
 function showTgSetup() {
   const el = document.getElementById('tg-setup');
