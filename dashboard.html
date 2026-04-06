@@ -1039,11 +1039,16 @@ async function init() {
   setInterval(update, UPDATE_INTERVAL);
   // 5분마다 차트+지표+스코어+펀딩비 갱신
   setInterval(async () => {
-    await loadChart(currentInterval);
-    const [dd, hd] = await Promise.all([fetchCandles('days',200), fetchCandles('minutes240',200), fetchFundingRate()]);
-    const r4h = calcRSI(hd.map(d=>d.close));
-    document.getElementById('rsi-4h').textContent = r4h?.toFixed(1)||'-';
-    updateIndicators(dd.map(d=>d.close), r4h, dd);
+    try {
+      await loadChart(currentInterval);
+      const [dd, hd] = await Promise.all([fetchCandles('days',200), fetchCandles('minutes240',200), fetchFundingRate()]);
+      const r4h = calcRSI(hd.map(d=>d.close));
+      document.getElementById('rsi-4h').textContent = r4h?.toFixed(1)||'-';
+      updateIndicators(dd.map(d=>d.close), r4h, dd);
+      console.log('[OK] 5분 갱신 완료', new Date().toLocaleTimeString('ko-KR'));
+    } catch(e) {
+      console.error('[ERR] 5분 갱신 실패, 다음 주기에 재시도:', e.message);
+    }
   }, UPDATE_INTERVAL * 5);
 }
 
