@@ -574,7 +574,24 @@ function updatePrice(ticker) {
   updatePnlBar(pnl_pct);
 
   lastPrice = price;
+  lastChangeRate = ticker.signed_change_rate || 0;
   document.getElementById('update-time').textContent = new Date().toLocaleTimeString('ko-KR');
+
+  // 매분 스코어링 재계산 (캐시된 지표 사용)
+  if (cachedIndicators.rsiDay) {
+    const fgVal = parseInt(document.getElementById('fg-value').textContent) || 50;
+    const result = calculateScore(
+      price, cachedIndicators.rsiDay, cachedIndicators.rsi4h,
+      cachedIndicators.macd, cachedIndicators.signal, cachedIndicators.hist,
+      cachedIndicators.ma50, cachedIndicators.ma200,
+      cachedIndicators.bbUpper, cachedIndicators.bbLower,
+      fgVal, pnl_pct, cachedFundingRate
+    );
+    updateScoreUI(result);
+    if (cachedIndicators.atr) {
+      updateRiskMetrics(price, cachedIndicators.atr, result.total);
+    }
+  }
 }
 
 function updatePnlBar(pnl_pct) {
@@ -861,6 +878,7 @@ function testAlert() {
 }
 
 let lastPrice = 0;
+let lastChangeRate = 0;
 let cachedFundingRate = null;
 
 // ===== 잔고 모달 =====
