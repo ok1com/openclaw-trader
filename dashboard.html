@@ -460,6 +460,46 @@ function calcMA(closes, period) {
   return s.reduce((a,b)=>a+b,0)/period;
 }
 
+function calcATR(candles, period=14) {
+  if (candles.length < period+1) return null;
+  const trs = [];
+  for (let i=1; i<candles.length; i++) {
+    const h = candles[i].high, l = candles[i].low, pc = candles[i-1].close;
+    trs.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc)));
+  }
+  const recent = trs.slice(-period);
+  return recent.reduce((a,b)=>a+b,0)/period;
+}
+
+function updateRiskMetrics(price, atr, finalScore) {
+  if (!atr || !price) return;
+  const multiplier = 2.5;
+  const stopPrice = Math.round(price - atr * multiplier);
+  const stopPct = ((stopPrice - price) / price * 100).toFixed(1);
+  const target = Math.round(price + atr * 4);
+  const risk = Math.abs(price - stopPrice);
+  const reward = Math.abs(target - price);
+  const rr = risk > 0 ? (reward / risk) : 0;
+
+  // Kelly
+  const winRate = Math.max(0.30, Math.min(0.70, 0.50 + finalScore / 200));
+  const b = rr;
+  const kellyFull = b > 0 ? (b * winRate - (1-winRate)) / b : 0;
+  const kellyHalf = Math.max(0, Math.min(kellyFull / 2, 0.25));
+  const totalCap = position.krw + position.eth * price;
+  const kellyPos = Math.round(totalCap * kellyHalf);
+  const maxLoss = Math.round(totalCap * 0.02);
+
+  document.getElementById('atr-val').textContent = Math.round(atr).toLocaleString() + '원';
+  const stopEl = document.getElementById('atr-stop');
+  stopEl.textContent = stopPrice.toLocaleString() + '원 (' + stopPct + '%)';
+  const rrEl = document.getElementById('rr-ratio');
+  rrEl.textContent = rr.toFixed(2) + ':1 ' + (rr >= 2 ? '✅' : '⚠️');
+  rrEl.style.color = rr >= 2 ? 'var(--green)' : 'var(--yellow)';
+  document.getElementById('kelly-pos').textContent = kellyPos.toLocaleString() + '원';
+  document.getElementById('max-loss').textContent = maxLoss.toLocaleString() + '원';
+}
+
 // ===== UI 업데이트 =====
 function updatePrice(ticker) {
   if (!ticker) return;
@@ -512,7 +552,7 @@ function updatePnlBar(pnl_pct) {
 // 마지막 계산된 지표값 캐시
 let cachedIndicators = {};
 
-function updateIndicators(closes, rsi4hVal) {
+function updateIndicators(closes, rsi4hVal, dayCandles) {
   if (!closes || closes.length < 200) return;
 
   const rsiDay = calcRSI(closes);
