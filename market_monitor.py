@@ -25,6 +25,14 @@ def calc_macd(df):
     signal = macd.ewm(span=9).mean()
     return macd.iloc[-1], signal.iloc[-1], (macd - signal).iloc[-1]
 
+def calc_atr(df, period=14):
+    """ATR(Average True Range) 계산"""
+    high = df['high']
+    low = df['low']
+    close = df['close'].shift(1)
+    tr = pd.concat([high - low, (high - close).abs(), (low - close).abs()], axis=1).max(axis=1)
+    return tr.rolling(period).mean().iloc[-1]
+
 def calc_bollinger(df, period=20):
     ma = df['close'].rolling(period).mean()
     std = df['close'].rolling(period).std()
@@ -55,6 +63,7 @@ def get_technical_data(symbol=SYMBOL):
         "bb_upper": round(bb_upper),
         "bb_mid": round(bb_mid),
         "bb_lower": round(bb_lower),
+        "atr_day": round(calc_atr(df_day)),
         "golden_cross": ma50 > ma200,
         "timestamp": datetime.now().isoformat()
     }
