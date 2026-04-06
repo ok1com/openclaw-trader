@@ -888,146 +888,53 @@ let lastPrice = 0;
 let lastChangeRate = 0;
 let cachedFundingRate = null;
 
-// ===== 잔고 모달 (업비트 API 연동) =====
-let fetchedBalance = null; // 조회 결과 임시 저장
+// ===== 잔고 모달 (balance.json 연동) =====
+let fetchedBalance = null;
 
 function showBalance() {
-  const modal = document.getElementById('balance-modal');
-  modal.style.display = 'flex';
-  // 저장된 키가 있으면 입력란에 표시
-  document.getElementById('upbit-access-key').value = localStorage.getItem('upbit_access_key') || '';
-  document.getElementById('upbit-secret-key').value = localStorage.getItem('upbit_secret_key') || '';
-  // 키가 이미 있으면 폼 숨김
-  if (localStorage.getItem('upbit_access_key')) {
-    document.getElementById('bal-key-form').style.display = 'none';
-    document.getElementById('bal-key-toggle').textContent = '🔑 API 키 설정 (저장됨) ▸';
-  }
+  document.getElementById('balance-modal').style.display = 'flex';
+  loadBalanceJson();
 }
 
 function closeBalance() {
   document.getElementById('balance-modal').style.display = 'none';
 }
 
-function toggleApiKeys() {
-  const form = document.getElementById('bal-key-form');
-  const btn = document.getElementById('bal-key-toggle');
-  if (form.style.display === 'none') {
-    form.style.display = 'block';
-    btn.textContent = '🔑 API 키 설정 ▾';
-  } else {
-    form.style.display = 'none';
-    btn.textContent = '🔑 API 키 설정 ▸';
-  }
-}
-
-function saveApiKeys() {
-  const ak = document.getElementById('upbit-access-key').value.trim();
-  const sk = document.getElementById('upbit-secret-key').value.trim();
-  if (!ak || !sk) {
-    document.getElementById('bal-key-status').textContent = '❌ 둘 다 입력';
-    document.getElementById('bal-key-status').style.color = 'var(--red)';
-    return;
-  }
-  localStorage.setItem('upbit_access_key', ak);
-  localStorage.setItem('upbit_secret_key', sk);
-  document.getElementById('bal-key-status').textContent = '✅ 저장됨';
-  document.getElementById('bal-key-status').style.color = 'var(--green)';
-  document.getElementById('bal-key-form').style.display = 'none';
-  document.getElementById('bal-key-toggle').textContent = '🔑 API 키 설정 (저장됨) ▸';
-}
-
-// JWT 생성 (업비트 인증용, Web Crypto API)
-async function createUpbitJWT(accessKey, secretKey) {
-  const header = {alg: 'HS256', typ: 'JWT'};
-  const payload = {access_key: accessKey, nonce: crypto.randomUUID()};
-
-  const b64url = (obj) => {
-    const str = typeof obj === 'string' ? obj : JSON.stringify(obj);
-    return btoa(str).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');
-  };
-
-  const headerB64 = b64url(header);
-  const payloadB64 = b64url(payload);
-  const signingInput = headerB64 + '.' + payloadB64;
-
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw', encoder.encode(secretKey),
-    {name: 'HMAC', hash: 'SHA-256'}, false, ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(signingInput));
-  const sigB64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
-    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'');
-
-  return signingInput + '.' + sigB64;
-}
-
-async function fetchUpbitBalance() {
-  const ak = localStorage.getItem('upbit_access_key');
-  const sk = localStorage.getItem('upbit_secret_key');
+async function loadBalanceJson() {
   const statusEl = document.getElementById('bal-status');
   const btn = document.getElementById('bal-fetch-btn');
-
-  if (!ak || !sk) {
-    statusEl.textContent = '🔑 먼저 API 키를 설정하세요';
-    statusEl.style.color = 'var(--yellow)';
-    toggleApiKeys();
-    return;
-  }
-
   btn.textContent = '⏳ 조회 중...';
   btn.disabled = true;
-  statusEl.textContent = '';
 
   try {
-    const token = await createUpbitJWT(ak, sk);
-    const resp = await fetch('https://api.upbit.com/v1/accounts', {
-      headers: {'Authorization': 'Bearer ' + token}
-    });
+    const resp = await fetch('./data/balance.json?t=' + Date.now());
+    if (!resp.ok) throw new Error('balance.json 없음');
+    const data = await resp.json();
 
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.error?.message || `HTTP ${resp.status}`);
-    }
+    const price = lastPrice || data.current_price;
+    const ethEval = data.eth_balance * price;
+    const totalAsset = data.krw_balance + ethEval;
+    const pnlPct = data.eth_avg_price > 0 ? ((price - data.eth_avg_price) / data.eth_avg_price * 100) : 0;
+    const pnlKrw = data.eth_avg_price > 0 ? (price - data.eth_avg_price) * data.eth_balance : 0;
 
-    const accounts = await resp.json();
-    const krwAcc = accounts.find(a => a.currency === 'KRW');
-    const ethAcc = accounts.find(a => a.currency === 'ETH');
+    fetchedBalance = {avg_price: data.eth_avg_price, eth: data.eth_balance, krw: data.krw_balance};
 
-    const krwBal = krwAcc ? parseFloat(krwAcc.balance) : 0;
-    const ethBal = ethAcc ? parseFloat(ethAcc.balance) : 0;
-    const ethAvg = ethAcc ? parseFloat(ethAcc.avg_buy_price) : 0;
-    const ethLocked = ethAcc ? parseFloat(ethAcc.locked || 0) : 0;
-    const ethTotal = ethBal + ethLocked;
-    const price = lastPrice || 0;
-    const ethVal = ethTotal * price;
-    const totalAsset = krwBal + ethVal;
-    const pnlPct = ethAvg > 0 ? ((price - ethAvg) / ethAvg * 100) : 0;
-    const pnlKrw = ethAvg > 0 ? (price - ethAvg) * ethTotal : 0;
-
-    // 결과 임시 저장
-    fetchedBalance = {avg_price: ethAvg, eth: ethTotal, krw: krwBal};
-
-    // UI 표시
     document.getElementById('bal-total').textContent = Math.round(totalAsset).toLocaleString() + '원';
-    document.getElementById('bal-krw-display').textContent = Math.round(krwBal).toLocaleString() + '원';
-    document.getElementById('bal-eth-display').textContent = ethTotal.toFixed(4) + ' ETH';
-    document.getElementById('bal-avg-display').textContent = Math.round(ethAvg).toLocaleString() + '원';
-    document.getElementById('bal-eth-val').textContent = Math.round(ethVal).toLocaleString() + '원';
+    document.getElementById('bal-krw-display').textContent = Math.round(data.krw_balance).toLocaleString() + '원';
+    document.getElementById('bal-eth-display').textContent = data.eth_balance.toFixed(4) + ' ETH';
+    document.getElementById('bal-avg-display').textContent = Math.round(data.eth_avg_price).toLocaleString() + '원';
+    document.getElementById('bal-eth-val').textContent = Math.round(ethEval).toLocaleString() + '원';
     const pnlEl = document.getElementById('bal-pnl');
     pnlEl.textContent = `${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}% (${pnlKrw>=0?'+':''}${Math.round(pnlKrw).toLocaleString()}원)`;
     pnlEl.style.color = pnlPct >= 0 ? 'var(--green)' : 'var(--red)';
 
-    document.getElementById('bal-result').style.display = 'block';
-    document.getElementById('bal-last-fetch').textContent = '조회: ' + new Date().toLocaleString('ko-KR');
-    statusEl.textContent = '✅ 조회 성공';
-    statusEl.style.color = 'var(--green)';
+    document.getElementById('bal-last-fetch').textContent = '업비트 조회: ' + data.updated_at;
+    statusEl.textContent = '';
   } catch(e) {
-    statusEl.textContent = '❌ 조회 실패: ' + e.message;
-    statusEl.style.color = 'var(--red)';
-    console.error('Upbit balance fetch error:', e);
+    statusEl.textContent = '❌ 잔고 데이터 없음. 서버에서 fetch_balance.py 실행 필요';
+    statusEl.style.color = 'var(--yellow)';
   } finally {
-    btn.textContent = '🔄 업비트 잔고 조회';
+    btn.textContent = '🔄 새로고침';
     btn.disabled = false;
   }
 }
@@ -1038,12 +945,10 @@ function applyBalance() {
   position.eth = fetchedBalance.eth;
   position.krw = fetchedBalance.krw;
   localStorage.setItem(LS_POSITION, JSON.stringify(position));
-  // 대시보드 즉시 반영
   if (lastPrice) {
     updatePrice({trade_price: lastPrice, signed_change_rate: lastChangeRate || 0});
   }
-  document.getElementById('bal-status').textContent = '✅ 대시보드에 반영 완료!';
-  document.getElementById('bal-status').style.color = 'var(--green)';
+  closeBalance();
   const toast = document.getElementById('toast');
   toast.textContent = '💰 업비트 잔고가 대시보드에 반영되었습니다';
   toast.style.display = 'block';
