@@ -118,8 +118,7 @@ def _format_scan_signals(signals):
     if not signals:
         return "😴 매매 신호 없음."
     
-    msg = "🚨 감지된 매매 신호:
-"
+    msg = """🚨 감지된 매매 신호:\n"""
     for s in signals:
         msg += f"- {s['name']} ({s['stock_code']}): {', '.join(s['reasons'])}\n"
     return msg
