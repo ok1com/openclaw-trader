@@ -2,9 +2,22 @@ import os
 import asyncio
 import logging
 import pathlib
-from telegram import Update
+from telegram import Update, Bot
 from telegram.ext import Application, CommandHandler, ContextTypes
 from dotenv import load_dotenv
+
+# ... existing code ...
+
+async def send_message_to_chat(message: str):
+    if not BOT_TOKEN or not CHAT_ID:
+        logging.error("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set.")
+        return
+    bot = Bot(BOT_TOKEN)
+    for chunk in chunk_message(message):
+        try:
+            await bot.send_message(chat_id=CHAT_ID, text=chunk)
+        except Exception as e:
+            logging.error(f"Failed to send Telegram message: {e}")
 
 _BASE = pathlib.Path(__file__).parent
 load_dotenv(_BASE / 'config' / '.env')
