@@ -128,9 +128,10 @@ def _format_scan_signals(signals):
 def run_scan_only():
     """스캔만 실행 (매매 없음)"""
     print("📡 스캔 전용 모드...")
-    bot = TelegramBot()
     all_data, signals = scan_all_stocks()
-    bot.send_scan_result(signals)
+    
+    formatted_message = _format_scan_signals(signals)
+    asyncio.run(send_message_to_chat(formatted_message))
 
     if signals:
         print("\n🚨 감지된 신호:")
