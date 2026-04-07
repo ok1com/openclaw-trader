@@ -5,13 +5,14 @@ OpenClaw Trader - 메인 실행 파일
 import json
 import sys
 import time
+import asyncio
 from datetime import datetime
 from config import SAFETY, SCHEDULE, validate_config
 from market_monitor import scan_all_stocks, get_stock_data
 from ai_analyst import analyze_stock, analyze_signals
 from risk_manager import RiskManager
 from order_executor import OrderExecutor, format_order_message
-from telegram_bot import TelegramBot
+from telegram_bot import send_message_to_chat
 
 
 def run_trading_pipeline():
@@ -111,6 +112,17 @@ def run_trading_pipeline():
     print(f"\n{'='*50}")
     print(f"✅ 파이프라인 완료")
     print(f"{'='*50}")
+
+
+def _format_scan_signals(signals):
+    if not signals:
+        return "😴 매매 신호 없음."
+    
+    msg = "🚨 감지된 매매 신호:
+"
+    for s in signals:
+        msg += f"- {s['name']} ({s['stock_code']}): {', '.join(s['reasons'])}\n"
+    return msg
 
 
 def run_scan_only():
