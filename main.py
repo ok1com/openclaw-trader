@@ -130,7 +130,8 @@ def run_scan_only():
     all_data, signals = scan_all_stocks()
     
     formatted_message = _format_scan_signals(signals)
-    asyncio.run(send_message_to_chat(formatted_message))
+    print(formatted_message)
+    # asyncio.run(send_message_to_chat(formatted_message)) # Temporarily disabled for OpenClaw capture
 
     if signals:
         print("\n🚨 감지된 신호:")
