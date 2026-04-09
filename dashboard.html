@@ -887,6 +887,18 @@ function testAlert() {
 }
 
 let lastPrice = 0;
+let exchangeRate = 0;
+
+async function fetchExchangeRate() {
+  try {
+    const r = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    const d = await r.json();
+    exchangeRate = d.rates.KRW || 0;
+  } catch(e) {
+    // 폴백: 고정 환율
+    exchangeRate = 1450;
+  }
+}
 let lastChangeRate = 0;
 let cachedFundingRate = null;
 
@@ -1044,6 +1056,7 @@ async function update() {
 }
 
 async function init() {
+  fetchExchangeRate();
   initChart();
   await loadChart('minutes60');
 

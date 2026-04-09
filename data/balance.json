@@ -1,15 +1,15 @@
 {
-  "updated_at": "2026-04-09 19:07:00",
-  "timestamp": 1775729220,
+  "updated_at": "2026-04-09 19:07:15",
+  "timestamp": 1775729235,
   "krw_balance": 4000001,
   "eth_balance": 1.8011,
   "eth_locked": 0.0,
   "eth_avg_price": 3202793,
-  "current_price": 3268000.0,
-  "eth_eval": 5885922,
-  "total_asset": 9885923,
-  "pnl_pct": 2.04,
-  "pnl_krw": 117442,
+  "current_price": 3267000.0,
+  "eth_eval": 5884121,
+  "total_asset": 9884122,
+  "pnl_pct": 2.0,
+  "pnl_krw": 115641,
   "all_accounts": [
     {
       "currency": "KRW",
