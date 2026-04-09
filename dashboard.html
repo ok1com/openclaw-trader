@@ -557,7 +557,9 @@ function updatePrice(ticker) {
   const price = ticker.trade_price;
   const change = ticker.signed_change_rate * 100;
 
-  document.getElementById('price').textContent = price.toLocaleString() + '원';
+  const usdPrice = exchangeRate > 0 ? (price / exchangeRate) : 0;
+  document.getElementById('price').innerHTML = price.toLocaleString() + '원' +
+    (usdPrice > 0 ? `<span style="font-size:14px;color:var(--dim);margin-left:8px">$${usdPrice.toFixed(2)}</span>` : '');
   const changeEl = document.getElementById('price-change');
   changeEl.textContent = `${change>=0?'+':''}${change.toFixed(2)}% (24h)`;
   changeEl.style.color = change>=0 ? 'var(--green)' : 'var(--red)';

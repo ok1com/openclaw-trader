@@ -1,27 +1,27 @@
 {
-  "updated_at": "2026-04-08 13:00:58",
-  "timestamp": 1775620858,
-  "krw_balance": 3241986,
-  "eth_balance": 0.8053,
+  "updated_at": "2026-04-09 19:07:00",
+  "timestamp": 1775729220,
+  "krw_balance": 4000001,
+  "eth_balance": 1.8011,
   "eth_locked": 0.0,
-  "eth_avg_price": 3139496,
-  "current_price": 3312000.0,
-  "eth_eval": 2667026,
-  "total_asset": 5909012,
-  "pnl_pct": 5.49,
-  "pnl_krw": 138911,
+  "eth_avg_price": 3202793,
+  "current_price": 3268000.0,
+  "eth_eval": 5885922,
+  "total_asset": 9885923,
+  "pnl_pct": 2.04,
+  "pnl_krw": 117442,
   "all_accounts": [
     {
       "currency": "KRW",
-      "balance": "3241985.73091126",
+      "balance": "4000000.75269335",
       "locked": "0",
       "avg_buy_price": "0"
     },
     {
       "currency": "ETH",
-      "balance": "0.80526151",
+      "balance": "1.80107769",
       "locked": "0",
-      "avg_buy_price": "3139495.59828504"
+      "avg_buy_price": "3202793.41305558"
     }
   ]
 }
