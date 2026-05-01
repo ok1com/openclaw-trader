@@ -21,8 +21,9 @@ class OrderExecutor:
         # This will return KRW balance and any other crypto balances
         upbit = self._get_upbit()
         balances = upbit.get_balances()
-        print(f"DEBUG: balances type: {type(balances)}")
-        print(f"DEBUG: balances content: {balances}")
+        if isinstance(balances, dict) and 'error' in balances:
+            print(f"Upbit API Error: {balances['error']['message']}")
+            return {"error": balances['error']['message']}
         if balances:
             return {
                 "krw_balance": next((float(b['balance']) for b in balances if b['currency'] == 'KRW'), 0.0),
