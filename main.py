@@ -120,7 +120,7 @@ def _format_scan_signals(signals):
     
     msg = """🚨 감지된 매매 신호:\n"""
     for s in signals:
-        msg += f"- {s['name']} ({s['stock_code']}): {', '.join(s['reasons'])}\n"
+        msg += f"- {s['name']} ({s['code']}): {', '.join(s['reasons'])}\n"
     return msg
 
 
