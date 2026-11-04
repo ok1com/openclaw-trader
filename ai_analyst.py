@@ -10,7 +10,7 @@ from data_fetcher import get_fear_greed, get_onchain, get_funding_rate
 
 load_dotenv(_BASE / 'config' / '.env')
 
-genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+
 
 def _build_simple_prompt(tech_data, stock_name, stock_code):
     current_price = tech_data['price']
